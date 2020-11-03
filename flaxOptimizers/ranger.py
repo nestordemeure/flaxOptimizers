@@ -23,7 +23,7 @@ class _RangerHyperParams:
 class _RangerParamState:
     grad_ema: onp.ndarray
     grad_sq_ema: onp.ndarray
-    slow_buffer: onp.ndarray
+    lookahead_ema: onp.ndarray
 
 class Ranger(OptimizerDef):
     """
@@ -32,7 +32,7 @@ class Ranger(OptimizerDef):
     """
 
     def __init__(self, learning_rate=1e-3, beta1=0.95, beta2=0.999, eps=1e-5, weight_decay=0.0,
-                       beta_lookahead=0.5, lookahead_every_nth_iter=6, n_sma_threshhold=5, use_gc=True):
+                 beta_lookahead=0.5, lookahead_every_nth_iter=6, n_sma_threshhold=5, use_gc=True):
         hyper_params = _RangerHyperParams(learning_rate, beta1, beta2, eps, weight_decay,
                                           beta_lookahead, lookahead_every_nth_iter, n_sma_threshhold, use_gc)
         super().__init__(hyper_params)
@@ -73,7 +73,7 @@ class Ranger(OptimizerDef):
         step_size_denum = (n_sma_inf - 4.) * (n_sma_inf - 2.) * n_sma_t
         # abs added to deal with negative values in first iterations (happens when the test will ignore step_size anyway)
         step_size = jnp.sqrt( jnp.abs(step_size_num / step_size_denum) )
-        denom = jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps
+        denom = jnp.sqrt(grad_sq_ema_corr) + eps
         # update tensor computation
         update = gpu_cond(n_sma_t, n_sma_threshhold, # n_sma_t > n_sma_threshhold
                           step_size * grad_ema_corr / denom, # true
@@ -86,9 +86,9 @@ class Ranger(OptimizerDef):
         new_param = param - update * learning_rate
 
         # integrated look ahead
-        (new_param, slow_buffer) = _lookahead(new_param, state.slow_buffer, step, beta_lookahead, lookahead_every_nth_iter)
+        (new_param, lookahead_ema) = _lookahead(new_param, state.lookahead_ema, step, beta_lookahead, lookahead_every_nth_iter)
 
-        new_state = _RangerParamState(grad_ema, grad_sq_ema, slow_buffer)
+        new_state = _RangerParamState(grad_ema, grad_sq_ema, lookahead_ema)
         return new_param, new_state
 
 def _gradient_centralization(grad, use_gc=True):
@@ -98,9 +98,9 @@ def _gradient_centralization(grad, use_gc=True):
         grad -= grad.mean(axis=averaging_dimensions, keepdims=True)
     return grad
 
-def _lookahead(param, slow_buffer, step, beta_lookahead=0.5, lookahead_every_nth_iter=4):
+def _lookahead(param, lookahead_ema, step, beta_lookahead=0.5, lookahead_every_nth_iter=4):
     """lookahead at the param level instead of group level"""
     if step % lookahead_every_nth_iter == 0:
-        slow_buffer = beta_lookahead*slow_buffer + (1.0 - beta_lookahead)*param
-        param = slow_buffer
-    return (param, slow_buffer)
+        lookahead_ema = beta_lookahead*lookahead_ema + (1.0 - beta_lookahead)*param
+        param = lookahead_ema
+    return (param, lookahead_ema)
