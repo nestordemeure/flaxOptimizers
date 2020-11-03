@@ -86,7 +86,7 @@ class Ranger(OptimizerDef):
         new_param = param - update * learning_rate
 
         # integrated look ahead
-        (new_param, lookahead_ema) = _lookahead(new_param, state.lookahead_ema, step, beta_lookahead, lookahead_every_nth_iter)
+        (new_param, lookahead_ema) = _lookahead(new_param, state.lookahead_ema, t, beta_lookahead, lookahead_every_nth_iter)
 
         new_state = _RangerParamState(grad_ema, grad_sq_ema, lookahead_ema)
         return new_param, new_state
