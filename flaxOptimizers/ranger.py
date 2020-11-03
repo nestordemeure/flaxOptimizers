@@ -1,11 +1,10 @@
-import math
 import numpy as onp
 import jax.numpy as jnp
 from jax import lax
 from flax.optim import OptimizerDef
 from flax import struct
 
-from .utilities import gpu_cond
+from .utilities import gpu_cond, is_greater, is_mod
 
 @struct.dataclass
 class _RangerHyperParams:
@@ -75,7 +74,7 @@ class Ranger(OptimizerDef):
         step_size = jnp.sqrt( jnp.abs(step_size_num / step_size_denum) )
         denom = jnp.sqrt(grad_sq_ema_corr) + eps
         # update tensor computation
-        update = gpu_cond(n_sma_t, n_sma_threshhold, # n_sma_t > n_sma_threshhold
+        update = gpu_cond(is_greater(n_sma_t, n_sma_threshhold), # n_sma_t > n_sma_threshhold
                           step_size * grad_ema_corr / denom, # true
                           grad_ema_corr) # false
 
@@ -100,7 +99,9 @@ def _gradient_centralization(grad, use_gc=True):
 
 def _lookahead(param, lookahead_ema, step, beta_lookahead=0.5, lookahead_every_nth_iter=4):
     """lookahead at the param level instead of group level"""
-    if step % lookahead_every_nth_iter == 0:
-        lookahead_ema = beta_lookahead*lookahead_ema + (1.0 - beta_lookahead)*param
-        param = lookahead_ema
+    condition = is_mod(step, lookahead_every_nth_iter)
+    lookahead_ema = gpu_cond(condition, # step % lookahead_every_nth_iter == 0
+                             beta_lookahead*lookahead_ema + (1.0 - beta_lookahead)*param, # true
+                             lookahead_ema) # false
+    param = gpu_cond(condition, lookahead_ema, param)
     return (param, lookahead_ema)
