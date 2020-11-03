@@ -1,7 +1,7 @@
 # Flax Optimizers
 
 A collection of optimizers for Flax.
-I increase it when I test a new optimizer but the repository is open to pull requests.
+The repository is open to pull requests.
 
 ## Installation
 

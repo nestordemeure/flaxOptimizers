@@ -4,8 +4,6 @@ from jax import lax
 from flax.optim import OptimizerDef
 from flax import struct
 
-from .utilities.gpu_tests import ifthenelse, is_greater
-
 @struct.dataclass
 class _RAdamHyperParams:
     learning_rate: onp.ndarray
@@ -61,9 +59,7 @@ class RAdam(OptimizerDef):
         step_size = jnp.sqrt( jnp.abs(step_size_num / step_size_denum) )
         denom = jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps
         # update tensor computation
-        update = ifthenelse(is_greater(n_sma_t, n_sma_threshhold), # n_sma_t > n_sma_threshhold
-                            step_size * grad_ema_corr / denom, # true
-                            grad_ema_corr) # false
+        update = jnp.where(n_sma_t > n_sma_threshhold, step_size * grad_ema_corr / denom, grad_ema_corr)
 
         new_param = param - hyper_params.learning_rate * update
         new_param -= hyper_params.learning_rate * weight_decay * param
