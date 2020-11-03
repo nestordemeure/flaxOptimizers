@@ -4,6 +4,8 @@ from jax import lax
 from flax.optim import OptimizerDef
 from flax import struct
 
+from .utilities import gpu_cond
+
 @struct.dataclass
 class _RAdamHyperParams:
     learning_rate: onp.ndarray
@@ -17,7 +19,6 @@ class _RAdamHyperParams:
 class _RAdamParamState:
     grad_ema: onp.ndarray
     grad_sq_ema: onp.ndarray
-
 
 class RAdam(OptimizerDef):
     """
@@ -48,21 +49,21 @@ class RAdam(OptimizerDef):
         # bias correction
         t = step + 1.
         grad_ema_corr = grad_ema / (1 - beta1 ** t)
+        grad_sq_ema_corr = grad_sq_ema / (1 - beta2 ** t)
 
         # RAdam update
         n_sma_inf = 2. / (1 - beta2) - 1.
         n_sma_t = n_sma_inf - (2. * t * beta2 ** t) / (1. - beta2 ** t)
-        if n_sma_t > n_sma_threshhold: # low variance
-            # step size computation
-            step_size_num = (n_sma_t - 4.) * (n_sma_t - 2.) * n_sma_inf
-            step_size_denum = (n_sma_inf - 4.) * (n_sma_inf - 2.) * n_sma_t
-            step_size = jnp.sqrt(step_size_num / step_size_denum)
-            # update tensor computation
-            grad_sq_ema_corr = grad_sq_ema / (1 - beta2 ** t)
-            denom = jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps
-            update = step_size * grad_ema_corr / denom
-        else: # hight variance
-            update = grad_ema_corr
+        # step size computation
+        step_size_num = (n_sma_t - 4.) * (n_sma_t - 2.) * n_sma_inf
+        step_size_denum = (n_sma_inf - 4.) * (n_sma_inf - 2.) * n_sma_t
+        # abs added to deal with negative values in first iterations (happens when the test will ignore step_size anyway)
+        step_size = jnp.sqrt( jnp.abs(step_size_num / step_size_denum) )
+        denom = jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps
+        # update tensor computation
+        update = gpu_cond(n_sma_t, n_sma_threshhold, # n_sma_t > n_sma_threshhold
+                          step_size * grad_ema_corr / denom, # true
+                          grad_ema_corr) # false
 
         new_param = param - hyper_params.learning_rate * update
         new_param -= hyper_params.learning_rate * weight_decay * param
