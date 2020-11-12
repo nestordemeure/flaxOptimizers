@@ -51,6 +51,10 @@ class AdamHD(OptimizerDef):
         step = grad_ema_corr / ( jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps ) + weight_decay * param
 
         # hypergradient computation and descent
+        # NOTE: here the original paper use the previous update step
+        # we approximate it with the current update step
+        # this is accurate as long as we are using an averaged step
+        # especially since the exponential averaging results in a small lag
         hypergrad = jnp.sum(grad * step)
         learning_rate = state.learning_rate + hypergrad * hyper_params.hypergrad_lr
 
