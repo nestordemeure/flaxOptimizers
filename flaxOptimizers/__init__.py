@@ -8,5 +8,5 @@ from .sadam import Sadam
 # my experiments
 from .rlaprop import RLaProp
 
-__all__ = ['AdamHD', 'LaProp', 'LaPropCentered', 'RAdam', 'Ranger', 'Sadam'
+__all__ = ['AdamHD', 'LaProp', 'LaPropCentered', 'RAdam', 'Ranger', 'Sadam',
            'RLaProp']
