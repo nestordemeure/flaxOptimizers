@@ -32,7 +32,7 @@ class AdamHD(OptimizerDef):
     def init_param_state(self, param):
         return _AdamHDParamState(jnp.zeros_like(param), jnp.zeros_like(param), self.hyper_params.learning_rate)
 
-    def apply_param_gradient(self, iteration, hyper_params, param, state, grad):
+    def apply_param_gradient(self, step, hyper_params, param, state, grad):
         beta1 = hyper_params.beta1
         beta2 = hyper_params.beta2
         weight_decay = hyper_params.weight_decay
@@ -43,21 +43,21 @@ class AdamHD(OptimizerDef):
         grad_sq_ema = beta2 * state.grad_sq_ema + (1. - beta2) * grad_sq
 
         # bias correction
-        t = iteration + 1.
+        t = step + 1.
         grad_ema_corr = grad_ema / (1 - beta1 ** t)
         grad_sq_ema_corr = grad_sq_ema / (1 - beta2 ** t)
 
         # new step (both gradient and weight decay) to be applied
-        step = grad_ema_corr / ( jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps ) + weight_decay * param
+        update = grad_ema_corr / ( jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps ) + weight_decay * param
 
         # hypergradient computation and descent
         # NOTE: here the original paper use the previous update step
         # we approximate it with the current update step
         # this is accurate as long as we are using an averaged step
         # especially since the exponential averaging results in a small lag
-        hypergrad = jnp.sum(grad * step)
+        hypergrad = jnp.sum(grad * update)
         learning_rate = state.learning_rate + hypergrad * hyper_params.hypergrad_lr
 
-        new_param = param - learning_rate * step
+        new_param = param - learning_rate * update
         new_state = _AdamHDParamState(grad_ema, grad_sq_ema, learning_rate)
         return new_param, new_state
