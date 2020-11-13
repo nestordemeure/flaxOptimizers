@@ -19,6 +19,7 @@ class AdaRem(OptimizerDef):
     """
     AdaRem
     https://arxiv.org/abs/2010.11041v1
+    TODO this implementation is not finished due to the limited information present in the current draft of the paper
     """
 
     def __init__(self, learning_rate=0.4, beta=0.9, eps=1e-8, weight_decay=0.0, lr_scaling=0.999):
@@ -46,6 +47,7 @@ class AdaRem(OptimizerDef):
         adjustement_coeffiscient = 1. + (lr_scaling**step) * b
 
         # update parameters (including weight decay)
+        # TODO should there be a projection here ?
         update = adjustement_coeffiscient * grad + weight_decay * param
         new_param = param - learning_rate * update
 
