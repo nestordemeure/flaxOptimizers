@@ -55,7 +55,7 @@ class AdamHD(OptimizerDef):
         # we approximate it with the current update step
         # this is accurate as long as we are using an averaged step
         # especially since the exponential averaging results in a small lag
-        hypergrad = jnp.sum(grad * update)
+        hypergrad = jnp.vdot(grad, update)
         learning_rate = state.learning_rate + hypergrad * hyper_params.hypergrad_lr
 
         new_param = param - learning_rate * update
