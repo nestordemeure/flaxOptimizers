@@ -13,7 +13,18 @@ pip install git+https://github.com/nestordemeure/flaxOptimizers.git
 
 ## Optimizers
 
-Some common and more arcane first order optimizers:
+Common optimizers, inherited from the official Flax implementation:
+
+- [Adafactor](https://arxiv.org/abs/1804.04235) A memory efficient optimizer, has been used for large-scale training of attention-based models.
+- [Adagrad](https://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf) Introduces a denominator to SGD so that each parameter has its own learning rate.
+- [Adam](https://arxiv.org/abs/1412.6980) The most common stochastic optimizer nowadays.
+- [LAMB](https://arxiv.org/abs/1904.00962) Improvement on LARS to makes it efficient across task types.
+- [LARS](https://arxiv.org/abs/1708.03888) An optimizer designed for large batch.
+- [Momentum](https://en.wikipedia.org/wiki/Stochastic_gradient_descent#Momentum) SGD with momentum, optionally Nesterov momentum.
+- [RMSProp](http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf) Developped to solve Adagrad's diminushing learning rate problem. 
+- [SGD](https://en.wikipedia.org/wiki/Stochastic_gradient_descent) The simplest stochastic gradient descent optimizer possible.
+
+More arcane first order optimizers:
 
 - [AdamHD](https://arxiv.org/abs/1703.04782) Uses hypergradient descent to tune its own learning rate. Good at the begining of the training but tends to underperform at the end.
 - [AdamP](https://arxiv.org/abs/2006.08217v2) Corrects premature step-size decay for scale-invariant weights. Useful when a model uses some form of Batch normalization.
@@ -26,17 +37,6 @@ Some common and more arcane first order optimizers:
 work in progress:
 - [AdaRem](https://arxiv.org/abs/2010.11041v1) Reduce oscilations in update vector.
 -->
-
-Inherited from the official Flax implementation:
-
-- [Adafactor](https://arxiv.org/abs/1804.04235) A memory efficient optimizer, has been used for large-scale training of attention-based models.
-- [Adagrad](https://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf) Introduces a denominator to SGD so that each parameter has its own learning rate.
-- [Adam](https://arxiv.org/abs/1412.6980) The most common stochastic optimizer nowadays.
-- [LAMB](https://arxiv.org/abs/1904.00962) Improvement on LARS to makes it efficient across task types.
-- [LARS](https://arxiv.org/abs/1708.03888) An optimizer designed for large batch.
-- [Momentum](https://en.wikipedia.org/wiki/Stochastic_gradient_descent#Momentum) SGD with momentum, optionally Nesterov momentum.
-- [RMSProp](http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf) Developped to solve Adagrad's diminushing learning rate problem. 
-- [SGD](https://en.wikipedia.org/wiki/Stochastic_gradient_descent) The simplest stochastic gradient descent optimizer possible.
 
 Optimizer wrappers:
 
