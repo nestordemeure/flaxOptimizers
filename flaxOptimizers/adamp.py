@@ -75,6 +75,7 @@ class AdamP(OptimizerDef):
         return new_param, new_state
 
 def _channel_view(x):
+    # TODO check that this is as appropriate for Flax as it is for pytorch
     channel_shape = (x.shape[0], -1)
     return x.reshape(channel_shape)
 

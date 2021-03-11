@@ -1,9 +1,8 @@
 # https://medium.com/@joel.barmettler/how-to-upload-your-python-package-to-pypi-65edc5fe9c56
-from distutils.core import setup
+from setuptools import setup, find_packages
 
 setup(
     name = 'flaxOptimizers',
-    packages = ['flaxOptimizers'],
     version = '1.0',
     license = 'apache-2.0',
     description = 'My optimizer implementations for Flax.',
@@ -21,4 +20,5 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3 :: Only',
     ],
+    packages=find_packages(),
 )

@@ -13,7 +13,7 @@ pip install git+https://github.com/nestordemeure/flaxOptimizers.git
 
 ## Optimizers
 
-Common optimizers, inherited from the official Flax implementation:
+Classical optimizers, inherited from the official Flax implementation:
 
 - [Adafactor](https://arxiv.org/abs/1804.04235) A memory efficient optimizer, has been used for large-scale training of attention-based models.
 - [Adagrad](https://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf) Introduces a denominator to SGD so that each parameter has its own learning rate.
@@ -24,7 +24,7 @@ Common optimizers, inherited from the official Flax implementation:
 - [RMSProp](http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf) Developped to solve Adagrad's diminushing learning rate problem. 
 - [SGD](https://en.wikipedia.org/wiki/Stochastic_gradient_descent) The simplest stochastic gradient descent optimizer possible.
 
-More arcane first order optimizers:
+More arcane first-order optimizers:
 
 - [AdamHD](https://arxiv.org/abs/1703.04782) Uses hypergradient descent to tune its own learning rate. Good at the begining of the training but tends to underperform at the end.
 - [AdamP](https://arxiv.org/abs/2006.08217v2) Corrects premature step-size decay for scale-invariant weights. Useful when a model uses some form of Batch normalization.
