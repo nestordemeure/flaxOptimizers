@@ -1,4 +1,3 @@
-# https://medium.com/@joel.barmettler/how-to-upload-your-python-package-to-pypi-65edc5fe9c56
 from setuptools import setup, find_packages
 
 setup(
@@ -9,7 +8,7 @@ setup(
     author = 'NestorDemeure',
     # author_email = 'your.email@domain.com',
     url = 'https://github.com/nestordemeure/flaxOptimizers',
-    # download_url = 'https://github.com/nestordemeure/AdaHessianJax/archive/v?.?.tar.gz',
+    # download_url = 'https://github.com/nestordemeure/flaxOptimizers/archive/v?.?.tar.gz',
     keywords = ['deep-learning', 'optimizer', 'flax'],
     install_requires=['jax', 'flax'],
     classifiers=[ # https://pypi.org/classifiers/
