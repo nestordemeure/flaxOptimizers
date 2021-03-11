@@ -8,7 +8,7 @@ setup(
     description = 'My optimizer implementations for Flax.',
     author = 'NestorDemeure',
     # author_email = 'your.email@domain.com',
-    url = 'https://github.com/nestordemeure/hyperknee',
+    url = 'https://github.com/nestordemeure/flaxOptimizers',
     # download_url = 'https://github.com/nestordemeure/AdaHessianJax/archive/v?.?.tar.gz',
     keywords = ['deep-learning', 'optimizer', 'flax'],
     install_requires=['jax', 'flax'],
