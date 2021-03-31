@@ -24,7 +24,7 @@ class Madgrad(OptimizerDef):
 
     Notes:
     - Madgrad usually requires less weight decay than other optimizer (often 0).
-    - The optimal learnign rate will usually not be the one used by SGD or Adam.
+    - The optimal learning rate will usually not be the one used by SGD or Adam.
       Some good values include :
       - 2.5e-4 for 152 layer PreActResNet on CIFAR10,
       - 0.001 for ResNet-50 on ImageNet,
