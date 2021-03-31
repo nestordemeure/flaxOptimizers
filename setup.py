@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'flaxOptimizers',
-    version = '1.0',
+    version = '1.1',
     license = 'apache-2.0',
     description = 'My optimizer implementations for Flax.',
     author = 'NestorDemeure',

@@ -5,6 +5,7 @@ from flax.optim import Adafactor, Adagrad, Adam, LAMB, LARS, Momentum, RMSProp, 
 from .adamhd import AdamHD
 from .adamp import AdamP
 from .laprop import LaProp, LaPropCentered
+from .madgrad import Madgrad
 from .radam import RAdam
 from .radamSimplified import RAdamSimplified
 from .ranger import Ranger
@@ -17,5 +18,5 @@ from .sadam import Sadam
 from .rlaprop import RLaProp
 
 __all__ = ['Adafactor', 'Adagrad', 'Adam', 'LAMB', 'LARS', 'Momentum', 'RMSProp', 'SGD', 'WeightNorm',
-           'AdamHD', 'AdamP', 'LaProp', 'LaPropCentered', 'RAdam', 'RAdamSimplified', 'Ranger', 'Sadam',
+           'AdamHD', 'AdamP', 'LaProp', 'LaPropCentered', 'Madgrad', 'RAdam', 'RAdamSimplified', 'Ranger', 'Sadam',
            'RLaProp',]

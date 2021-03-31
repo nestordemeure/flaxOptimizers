@@ -25,7 +25,7 @@ class RAdamSimplified(OptimizerDef):
     https://arxiv.org/abs/1910.04209
     """
 
-    def __init__(self, learning_rate=None, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.0, use_exponential_warmup=False):
+    def __init__(self, learning_rate=1e-3, beta1=0.9, beta2=0.999, eps=1e-8, weight_decay=0.0, use_exponential_warmup=False):
         """
         Same parameters as Adam.
         Set `use_exponential_warmup` to `True` if you want to use an exponential warmup instead of the linear warmup.
@@ -37,7 +37,6 @@ class RAdamSimplified(OptimizerDef):
         return _RAdamSimplifiedParamState(jnp.zeros_like(param), jnp.zeros_like(param))
 
     def apply_param_gradient(self, step, hyper_params, param, state, grad):
-        assert hyper_params.learning_rate is not None, 'no learning rate provided.'
         beta1 = hyper_params.beta1
         beta2 = hyper_params.beta2
         weight_decay = hyper_params.weight_decay

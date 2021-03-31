@@ -29,9 +29,10 @@ More arcane first-order optimizers:
 - [AdamHD](https://arxiv.org/abs/1703.04782) Uses hypergradient descent to tune its own learning rate. Good at the begining of the training but tends to underperform at the end.
 - [AdamP](https://arxiv.org/abs/2006.08217v2) Corrects premature step-size decay for scale-invariant weights. Useful when a model uses some form of Batch normalization.
 - [LapProp](https://arxiv.org/abs/2002.04839) Applies exponential smoothing to update rather than gradient.
+- [MADGRAD](https://arxiv.org/abs/2101.11075) Modernisation of the Adagrad family of optimizers, very competitive with Adam.
 - [RAdam](https://arxiv.org/abs/1908.03265) Uses a rectified variance estimation to compute the learning rate. Makes training smoother, especially in the first iterations.
 - [RAdamSimplified](https://arxiv.org/abs/1910.04209) Warmup strategy proposed to reproduce RAdam's result with a much decreased code complexity.
-- [Ranger](https://github.com/lessw2020/Ranger-Deep-Learning-Optimizer) Combines look-ahead, RAdam and gradient centralization to try and maximize performances. Designed with picture classification  problems in mind.
+- [Ranger](https://github.com/lessw2020/Ranger-Deep-Learning-Optimizer) Combines look-ahead, RAdam and gradient centralization to try and maximize performances. Designed with picture classification problems in mind.
 - [Sadam](https://arxiv.org/abs/1908.00700) Introduces an alternative to the epsilon parameter.
 
 <!--
