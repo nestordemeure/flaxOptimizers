@@ -56,7 +56,6 @@ class Madgrad(OptimizerDef):
         # parameter update
         new_param = state.initial_param - grad_sum / (jnp.cbrt(grad_sum_sq) + eps)
         new_param = beta*param + (1. - beta)*new_param # momentum
-        #new_param -= learning_rate * weight_decay * param # AdamW style weight decay
 
         new_state = _MadgradParamState(state.initial_param, grad_sum, grad_sum_sq)
         return new_param, new_state
