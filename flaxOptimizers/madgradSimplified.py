@@ -20,6 +20,9 @@ class MadgradSimplified(OptimizerDef):
     """
     Trying to simplify the Madgrad optimizer by refactoring it into a simpler form
     fusing beta and the learning rate using rewrites that suppose that the learnign rate is constant
+
+    the resulting code should behave similarly but has one less parameter (beta)
+    and a learning rate that behaves much closer to usual learning rates
     """
 
     def __init__(self, learning_rate=5e-3, eps=1e-6, weight_decay=0.0):
