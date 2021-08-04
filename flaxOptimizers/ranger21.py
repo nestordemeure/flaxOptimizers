@@ -153,8 +153,9 @@ def _gradient_normalization(grad, non_zero, centralize_gradients=True, normalize
     substract the mean from the gradient and divide it by its standard deviation
     `non_zero` is a function that takes an input and insures that it will not be zero or negative
     """
+    can_centralize = centralize_gradients and (grad.ndim > 1)
     can_normalize = normalize_gradients and (grad.size > 2)
-    if centralize_gradients or can_normalize:
+    if can_centralize or can_normalize:
         # takes into account the fact that the gradient might be 1D
         keepdims = (grad.ndim > 1)
         axis = tuple(range(1, grad.ndim)) if keepdims else None
@@ -166,7 +167,7 @@ def _gradient_normalization(grad, non_zero, centralize_gradients=True, normalize
             grad_std = grad.sd(axis=axis, keepdims=keepdims)
             grad /= non_zero(grad_std) # we divide *after* subtracting the mean
             # add the mean back to the gradient if we don't want to centralize it
-            if not centralize_gradients: grad += grad_mean
+            if not can_centralize: grad += grad_mean
     return grad
 
 def _learning_rate_scheduler(max_learning_rate, 
