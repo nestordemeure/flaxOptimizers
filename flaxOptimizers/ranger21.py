@@ -6,7 +6,6 @@ from jax.nn import softplus
 from flax.optim import OptimizerDef
 from flax import struct
 
-# TODO gradient standardisation
 # TODO document inputs
 # TODO document fact that this implem follows latest code rather than paper
 
@@ -26,7 +25,8 @@ class _Ranger21HyperParams:
     nb_iterations: onp.ndarray
     nb_warmup_iterations: onp.ndarray
     nb_warmdown_iterations: onp.ndarray
-    use_gc: onp.ndarray
+    centralize_gradients: onp.ndarray
+    normalize_gradients: onp.ndarray
 
 @struct.dataclass
 class _Ranger21ParamState:
@@ -50,13 +50,14 @@ class Ranger21(OptimizerDef):
                  weight_decay=1e-4,
                  beta_lookahead=0.5, lookahead_every_nth_iter=5,
                  nb_warmup_iterations=None, nb_warmdown_iterations=None,
-                 use_gc=True):
+                 centralize_gradients=True, normalize_gradients=True):
         nb_warmup_iterations = (0.22 * nb_iterations) if nb_warmup_iterations is None else nb_warmup_iterations
         nb_warmdown_iterations = (0.28 * nb_iterations) if nb_warmdown_iterations is None else nb_warmdown_iterations
         hyper_params = _Ranger21HyperParams(learning_rate, beta0, beta1, beta2, 
                                             eps, eps_clipping, use_softplus, beta_softplus,
                                             weight_decay, beta_lookahead, lookahead_every_nth_iter,
-                                            nb_iterations, nb_warmup_iterations, nb_warmdown_iterations, use_gc)
+                                            nb_iterations, nb_warmup_iterations, nb_warmdown_iterations,
+                                            centralize_gradients, normalize_gradients)
         super().__init__(hyper_params)
 
     def init_param_state(self, param):
@@ -68,14 +69,13 @@ class Ranger21(OptimizerDef):
         t = step + 1.
         beta0 = hyper_params.beta0
         beta1 = hyper_params.beta1
-        beta1_squared = beta1 * beta1
         beta2 = hyper_params.beta2
-        eps = hyper_params.eps
-        non_zero = partial(_non_zero, eps=eps, use_softplus=hyper_params.use_softplus, beta_softplus=hyper_params.beta_softplus)
+        beta1_squared = beta1 * beta1
+        non_zero = partial(_non_zero, eps=hyper_params.eps, use_softplus=hyper_params.use_softplus, beta_softplus=hyper_params.beta_softplus)
 
         # prepares gradient
         grad = _gradient_clipping(grad, eps=hyper_params.eps_clipping)
-        grad = _gradient_centralization(grad, use_gc=hyper_params.use_gc)
+        grad = _gradient_normalization(grad, non_zero, hyper_params.centralize_gradients, hyper_params.normalize_gradients)
 
         # first moment estimation
         # using positive-negative momentum and bias correction
@@ -127,12 +127,31 @@ def _gradient_clipping(grad, eps=1e-3):
     # TODO implement gradient clipping
     return grad
 
-def _gradient_centralization(grad, use_gc=True):
-    """concept taken from https://github.com/Yonghongwei/Gradient-Centralization"""
-    if use_gc and grad.ndim > 1:
-        averaging_dimensions = tuple(range(1, grad.ndim)) # 1 ... ndim-1
-        grad -= grad.mean(axis=averaging_dimensions, keepdims=True)
-    return grad
+def _gradient_normalization(grad, non_zero, centralize_gradients=True, normalize_gradients=True):
+    """
+    substract the mean from the gradient and divide it by its standard deviation
+    `non_zero` is a function that takes an input and insures that it will not be zero or negative
+    """
+    can_normalize = normalize_gradients and (grad.size > 2)
+    if centralize_gradients or can_normalize:
+        # takes into account the fact that the gradient might be 1D
+        keepdims = (grad.ndim > 1)
+        axis = tuple(range(1, grad.ndim)) if keepdims else None
+        # substract the mean from the gradient
+        grad_mean = grad.mean(axis=axis, keepdims=keepdims)
+        centralized_grad = grad - grad_mean
+        if can_normalize:
+            # divide the centralized gradient by its standard deviation
+            grad_std = grad.sd(axis=axis, keepdims=keepdims)
+            centralized_grad /= non_zero(grad_std)
+            # add the mean back to the gradient if we don't want to centralize it
+            return centralized_grad if centralize_gradients else (centralized_grad + grad_mean)
+        else: 
+            # we only wanted to centralize
+            return centralized_grad
+    else:
+        # otherwise does nothing
+        return grad
 
 def _axis_aware_euclidian_norm(param):
     """norm used in norm loss, with special cases to deal with various layer shapes"""
