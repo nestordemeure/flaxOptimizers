@@ -4,6 +4,11 @@ from jax import lax
 from flax.optim import OptimizerDef
 from flax import struct
 
+# TODO gradient standardisation
+# TODO softplus
+# TODO document inputs
+# TODO document fact that this implem follows latest code rather than paper
+
 @struct.dataclass
 class _Ranger21HyperParams:
     learning_rate: onp.ndarray
@@ -43,8 +48,8 @@ class Ranger21(OptimizerDef):
                  beta_lookahead=0.5, lookahead_every_nth_iter=5,
                  nb_warmup_iterations=None, nb_warmdown_iterations=None,
                  use_gc=True):
-        nb_warmup_iterations = 0.22 * nb_iterations if nb_warmup_iterations is None else nb_warmup_iterations
-        nb_warmdown_iterations = 0.28 * nb_iterations if nb_warmdown_iterations is None else nb_warmdown_iterations
+        nb_warmup_iterations = (0.22 * nb_iterations) if nb_warmup_iterations is None else nb_warmup_iterations
+        nb_warmdown_iterations = (0.28 * nb_iterations) if nb_warmdown_iterations is None else nb_warmdown_iterations
         hyper_params = _Ranger21HyperParams(learning_rate, beta0, beta1, beta2, eps, eps_clipping, weight_decay,
                                             beta_lookahead, lookahead_every_nth_iter,
                                             nb_iterations, nb_warmup_iterations, nb_warmdown_iterations, use_gc)
@@ -61,43 +66,39 @@ class Ranger21(OptimizerDef):
         beta1 = hyper_params.beta1
         beta1_squared = beta1 * beta1
         beta2 = hyper_params.beta2
-        weight_decay = hyper_params.weight_decay
-        beta_lookahead = hyper_params.beta_lookahead
-        lookahead_every_nth_iter = hyper_params.lookahead_every_nth_iter
 
         # prepares gradient
         grad = _gradient_clipping(grad, eps=hyper_params.eps_clipping)
         grad = _gradient_centralization(grad, use_gc=hyper_params.use_gc)
 
         # first moment estimation
+        # using positive-negative momentum and bias correction
         grad_ema = beta1_squared * state.grad_previous_ema + (1. - beta1_squared) * grad
-        # bias correction and positive negative momentum
-        grad_ema_corr = ((1 + beta0) * grad_ema - beta0 * state.grad_ema)/ (1 - beta1 ** t)
+        grad_ema_corr = ((1. + beta0) * grad_ema - beta0 * state.grad_ema) / (1. - beta1 ** t)
 
         # second moment estimation
+        # using positive-negative momentum and bias correction
         grad_sq = lax.square(grad)
         grad_sq_ema = beta2 * state.grad_sq_ema + (1. - beta2) * grad_sq
         grad_sq_ema_max = lax.max(state.grad_sq_ema_max, grad_sq_ema)
         grad_sq_ema_corr = grad_sq_ema_max / (1 - beta2 ** t)
 
-        # update
-        beta_normalizer = jnp.hypot(1+beta0, beta0)
+        # update vector
+        beta_normalizer = jnp.hypot(1. + beta0, beta0) # takes positive negative momentum into account
         denom = jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps
         update = grad_ema_corr / (beta_normalizer * denom)
 
         # TODO weight decay
-        update += param * weight_decay
-
-        # learning rate scheduling
-        warmup_scaling = t * jnp.max((1-beta2)/2, 1.0 / hyper_params.nb_warmup_iterations)
-        warmdown_scaling = (hyper_params.nb_iterations - t) / hyper_params.nb_warmdown_iterations
-        scheduled_learning_rate = jnp.min(1.0, warmup_scaling, warmdown_scaling) * hyper_params.learning_rate
+        update += param * hyper_params.weight_decay
 
         # applies update
+        scheduled_learning_rate = _learning_rate_scheduler(hyper_params.learning_rate, t, hyper_params.nb_iterations, 
+                                                           hyper_params.nb_warmup_iterations, hyper_params.nb_warmdown_iterations, 
+                                                           beta2)
         new_param = param - update * scheduled_learning_rate
 
-        # integrated look ahead
-        (new_param, lookahead_ema) = _lookahead(new_param, state.lookahead_ema, t, beta_lookahead, lookahead_every_nth_iter)
+        # look-ahead
+        (new_param, lookahead_ema) = _lookahead(new_param, state.lookahead_ema, t, hyper_params.beta_lookahead, hyper_params.lookahead_every_nth_iter)
 
         new_state = _Ranger21ParamState(state.grad_ema, grad_ema, grad_sq_ema, grad_sq_ema_max, lookahead_ema)
         return new_param, new_state
@@ -113,9 +114,18 @@ def _gradient_centralization(grad, use_gc=True):
         grad -= grad.mean(axis=averaging_dimensions, keepdims=True)
     return grad
 
+def _learning_rate_scheduler(max_learning_rate, 
+                             iteration, nb_iterations, nb_warmup_iterations, nb_warmdown_iterations, 
+                             beta2):
+    """combines explore-exploit scheduling with a linear warmup"""
+    warmup_scaling = jnp.max(0.5 * iteration * (1. - beta2), iteration / nb_warmup_iterations)
+    warmdown_scaling = (nb_iterations - iteration) / nb_warmdown_iterations
+    scaling = jnp.min(1., warmup_scaling, warmdown_scaling) 
+    return scaling * max_learning_rate
+
 def _lookahead(param, lookahead_ema, step, beta_lookahead=0.5, lookahead_every_nth_iter=4):
     """lookahead at the param level instead of group level"""
     condition = step % lookahead_every_nth_iter < 0.5 # == 0. but inexact to deal with roundoffs
-    lookahead_ema = jnp.where(condition, beta_lookahead*lookahead_ema + (1.0 - beta_lookahead)*param, lookahead_ema)
+    lookahead_ema = jnp.where(condition, beta_lookahead*lookahead_ema + (1. - beta_lookahead)*param, lookahead_ema)
     param = jnp.where(condition, lookahead_ema, param)
     return (param, lookahead_ema)
