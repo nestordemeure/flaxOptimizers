@@ -33,6 +33,7 @@ More arcane first-order optimizers:
 - [RAdam](https://arxiv.org/abs/1908.03265) Uses a rectified variance estimation to compute the learning rate. Makes training smoother, especially in the first iterations.
 - [RAdamSimplified](https://arxiv.org/abs/1910.04209) Warmup strategy proposed to reproduce RAdam's result with a much decreased code complexity.
 - [Ranger](https://github.com/lessw2020/Ranger-Deep-Learning-Optimizer) Combines look-ahead, RAdam and gradient centralization to try and maximize performances. Designed with picture classification problems in mind.
+- [Ranger21](https://arxiv.org/abs/2106.13731) An upgrade of Ranger that combines adaptive gradient clipping, gradient centralization, positive-negative momentum, norm loss, stable weight-decay, linear learning rate warm up, explore exploite scheduling, lookahead and Adam. It has been designed with transformers in mind.
 - [Sadam](https://arxiv.org/abs/1908.00700) Introduces an alternative to the epsilon parameter.
 
 <!--
