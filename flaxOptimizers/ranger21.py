@@ -41,8 +41,8 @@ class Ranger21(OptimizerDef):
     This implementation follows the [code](https://github.com/lessw2020/Ranger21)
     which has been updated since the publication of the [paper](https://arxiv.org/abs/2106.13731)
     
-    In particular it uses gradient normalization instead of gradient centralization
-    and the idea of using a softplus instead of an epsilon to deal with zero denominators
+    In particular it uses gradient normalization (unpublished) instead of gradient centralization
+    and the idea of using a softplus instead of an epsilon to deal with zero denominators (https://arxiv.org/abs/1908.00700)
     """
 
     def __init__(self, nb_iterations,
