@@ -1,11 +1,12 @@
+from functools import partial
 import numpy as onp
 import jax.numpy as jnp
 from jax import lax
+from jax.nn import softplus
 from flax.optim import OptimizerDef
 from flax import struct
 
 # TODO gradient standardisation
-# TODO softplus
 # TODO document inputs
 # TODO document fact that this implem follows latest code rather than paper
 
@@ -17,6 +18,8 @@ class _Ranger21HyperParams:
     beta2: onp.ndarray
     eps: onp.ndarray
     eps_clipping: onp.ndarray
+    use_softplus: onp.ndarray
+    beta_softplus: onp.ndarray
     weight_decay: onp.ndarray
     beta_lookahead: onp.ndarray
     lookahead_every_nth_iter: onp.ndarray
@@ -43,15 +46,16 @@ class Ranger21(OptimizerDef):
     def __init__(self, nb_iterations,
                  learning_rate=1e-3, 
                  beta0=0.9, beta1=0.9, beta2=0.999, 
-                 eps=1e-8, eps_clipping=1e-3, 
+                 eps=1e-8, eps_clipping=1e-3, use_softplus=False, beta_softplus=50,
                  weight_decay=1e-4,
                  beta_lookahead=0.5, lookahead_every_nth_iter=5,
                  nb_warmup_iterations=None, nb_warmdown_iterations=None,
                  use_gc=True):
         nb_warmup_iterations = (0.22 * nb_iterations) if nb_warmup_iterations is None else nb_warmup_iterations
         nb_warmdown_iterations = (0.28 * nb_iterations) if nb_warmdown_iterations is None else nb_warmdown_iterations
-        hyper_params = _Ranger21HyperParams(learning_rate, beta0, beta1, beta2, eps, eps_clipping, weight_decay,
-                                            beta_lookahead, lookahead_every_nth_iter,
+        hyper_params = _Ranger21HyperParams(learning_rate, beta0, beta1, beta2, 
+                                            eps, eps_clipping, use_softplus, beta_softplus,
+                                            weight_decay, beta_lookahead, lookahead_every_nth_iter,
                                             nb_iterations, nb_warmup_iterations, nb_warmdown_iterations, use_gc)
         super().__init__(hyper_params)
 
@@ -66,6 +70,8 @@ class Ranger21(OptimizerDef):
         beta1 = hyper_params.beta1
         beta1_squared = beta1 * beta1
         beta2 = hyper_params.beta2
+        eps = hyper_params.eps
+        non_zero = partial(_non_zero, eps=eps, use_softplus=hyper_params.use_softplus, beta_softplus=hyper_params.beta_softplus)
 
         # prepares gradient
         grad = _gradient_clipping(grad, eps=hyper_params.eps_clipping)
@@ -85,11 +91,15 @@ class Ranger21(OptimizerDef):
 
         # update vector
         beta_normalizer = jnp.hypot(1. + beta0, beta0) # takes positive negative momentum into account
-        denom = jnp.sqrt(grad_sq_ema_corr) + hyper_params.eps
-        update = grad_ema_corr / (beta_normalizer * denom)
+        denom = beta_normalizer * jnp.sqrt(grad_sq_ema_corr)
+        update = grad_ema_corr / non_zero(denom)
 
-        # TODO weight decay
-        update += param * hyper_params.weight_decay
+        # weight decay
+        # combining norm-loss and stable weight decay
+        euclidian_norm = _axis_aware_euclidian_norm(param) # for norm-loss regularization
+        effective_stepsize_inv = jnp.sqrt( jnp.mean(grad_sq_ema_corr) ) # for stable weight decay
+        scaled_weight_decay = hyper_params.weight_decay * (euclidian_norm - 1.) / non_zero(euclidian_norm*effective_stepsize_inv)
+        update += scaled_weight_decay * param
 
         # applies update
         scheduled_learning_rate = _learning_rate_scheduler(hyper_params.learning_rate, t, hyper_params.nb_iterations, 
@@ -103,6 +113,16 @@ class Ranger21(OptimizerDef):
         new_state = _Ranger21ParamState(state.grad_ema, grad_ema, grad_sq_ema, grad_sq_ema_max, lookahead_ema)
         return new_param, new_state
 
+def _non_zero(x, eps=1e-8, use_softplus=False, beta_softplus=50, threshold_softplus=20):
+    """insures that a value is non-zero either by applying a softplus or adding an epsilon to it"""
+    def smooth_softplus(x, beta, threshold=threshold_softplus): 
+        """
+        sofplus function but with additional control over the smoothness via the beta parameter
+        threshold is there for numerical stability
+        """
+        return jnp.where(x > threshold_softplus, x, softplus(beta * x) / beta)
+    return smooth_softplus(x, beta_softplus) if use_softplus else (x + eps)
+
 def _gradient_clipping(grad, eps=1e-3):
     # TODO implement gradient clipping
     return grad
@@ -110,9 +130,19 @@ def _gradient_clipping(grad, eps=1e-3):
 def _gradient_centralization(grad, use_gc=True):
     """concept taken from https://github.com/Yonghongwei/Gradient-Centralization"""
     if use_gc and grad.ndim > 1:
-        averaging_dimensions = tuple(range(1, grad.ndim)) # all except 0 axis
+        averaging_dimensions = tuple(range(1, grad.ndim)) # 1 ... ndim-1
         grad -= grad.mean(axis=averaging_dimensions, keepdims=True)
     return grad
+
+def _axis_aware_euclidian_norm(param):
+    """norm used in norm loss, with special cases to deal with various layer shapes"""
+    if param.ndim <= 1:
+        # fully flattens the norm
+        return jnp.linalg.norm(param, ord=2, keepdims=False)
+    else:
+        # dimensions along which to compute the norm, special case for linear layers
+        axis = 1 if param.ndim <= 3 else tuple(range(1, param.ndim)) # 1 ... ndim-1
+        return jnp.linalg.norm(param, ord=2, axis=axis, keepdims=True)
 
 def _learning_rate_scheduler(max_learning_rate, 
                              iteration, nb_iterations, nb_warmup_iterations, nb_warmdown_iterations, 
