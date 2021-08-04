@@ -140,7 +140,8 @@ def _axis_aware_euclidian_norm(param):
 def _gradient_clipping(grad, param, non_zero, eps=1e-3, threshold=1e-2):
     """
     variant of gradient clipping that uses a dynamic threshold
-    eps is there to avoid freezing zero-parameters
+    `eps` is there to avoid freezing zero-parameters
+    `non_zero` is a function that takes an input and insures that it will not be zero or negative
     """
     norm_grad = non_zero(_axis_aware_euclidian_norm(grad))
     norm_param = jnp.max(_axis_aware_euclidian_norm(param), eps)
@@ -159,19 +160,14 @@ def _gradient_normalization(grad, non_zero, centralize_gradients=True, normalize
         axis = tuple(range(1, grad.ndim)) if keepdims else None
         # substract the mean from the gradient
         grad_mean = grad.mean(axis=axis, keepdims=keepdims)
-        centralized_grad = grad - grad_mean
+        grad -= grad_mean
         if can_normalize:
             # divide the centralized gradient by its standard deviation
             grad_std = grad.sd(axis=axis, keepdims=keepdims)
-            centralized_grad /= non_zero(grad_std)
+            grad /= non_zero(grad_std) # we divide *after* subtracting the mean
             # add the mean back to the gradient if we don't want to centralize it
-            return centralized_grad if centralize_gradients else (centralized_grad + grad_mean)
-        else: 
-            # we only wanted to centralize
-            return centralized_grad
-    else:
-        # otherwise does nothing
-        return grad
+            if not centralize_gradients: grad += grad_mean
+    return grad
 
 def _learning_rate_scheduler(max_learning_rate, 
                              iteration, nb_iterations, nb_warmup_iterations, nb_warmdown_iterations, 
