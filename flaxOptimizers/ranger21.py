@@ -6,9 +6,6 @@ from jax.nn import softplus
 from flax.optim import OptimizerDef
 from flax import struct
 
-# TODO document inputs
-# TODO document fact that this implem follows latest code rather than paper
-
 @struct.dataclass
 class _Ranger21HyperParams:
     learning_rate: onp.ndarray
@@ -16,9 +13,10 @@ class _Ranger21HyperParams:
     beta1: onp.ndarray
     beta2: onp.ndarray
     eps: onp.ndarray
-    eps_clipping: onp.ndarray
     use_softplus: onp.ndarray
     beta_softplus: onp.ndarray
+    eps_clipping: onp.ndarray
+    threshold_clipping: onp.ndarray
     weight_decay: onp.ndarray
     beta_lookahead: onp.ndarray
     lookahead_every_nth_iter: onp.ndarray
@@ -39,14 +37,19 @@ class _Ranger21ParamState:
 class Ranger21(OptimizerDef):
     """
     Ranger21 optimizer.
-    https://github.com/lessw2020/Ranger21
-    https://arxiv.org/abs/2106.13731
+    
+    This implementation follows the [code](https://github.com/lessw2020/Ranger21)
+    which has been updated since the publication of the [paper](https://arxiv.org/abs/2106.13731)
+    
+    In particular it uses gradient normalization instead of gradient centralization
+    and the idea of using a softplus instead of an epsilon to deal with zero denominators
     """
 
     def __init__(self, nb_iterations,
                  learning_rate=1e-3, 
                  beta0=0.9, beta1=0.9, beta2=0.999, 
-                 eps=1e-8, eps_clipping=1e-3, use_softplus=False, beta_softplus=50,
+                 eps=1e-8, use_softplus=False, beta_softplus=50,
+                 eps_clipping=1e-3, threshold_clipping=1e-2,
                  weight_decay=1e-4,
                  beta_lookahead=0.5, lookahead_every_nth_iter=5,
                  nb_warmup_iterations=None, nb_warmdown_iterations=None,
@@ -54,7 +57,8 @@ class Ranger21(OptimizerDef):
         nb_warmup_iterations = (0.22 * nb_iterations) if nb_warmup_iterations is None else nb_warmup_iterations
         nb_warmdown_iterations = (0.28 * nb_iterations) if nb_warmdown_iterations is None else nb_warmdown_iterations
         hyper_params = _Ranger21HyperParams(learning_rate, beta0, beta1, beta2, 
-                                            eps, eps_clipping, use_softplus, beta_softplus,
+                                            eps, use_softplus, beta_softplus,
+                                            eps_clipping, threshold_clipping,
                                             weight_decay, beta_lookahead, lookahead_every_nth_iter,
                                             nb_iterations, nb_warmup_iterations, nb_warmdown_iterations,
                                             centralize_gradients, normalize_gradients)
@@ -74,7 +78,7 @@ class Ranger21(OptimizerDef):
         non_zero = partial(_non_zero, eps=hyper_params.eps, use_softplus=hyper_params.use_softplus, beta_softplus=hyper_params.beta_softplus)
 
         # prepares gradient
-        grad = _gradient_clipping(grad, eps=hyper_params.eps_clipping)
+        grad = _gradient_clipping(grad, param, non_zero, hyper_params.eps_clipping, hyper_params.threshold_clipping)
         grad = _gradient_normalization(grad, non_zero, hyper_params.centralize_gradients, hyper_params.normalize_gradients)
 
         # first moment estimation
@@ -123,9 +127,25 @@ def _non_zero(x, eps=1e-8, use_softplus=False, beta_softplus=50, threshold_softp
         return jnp.where(x > threshold_softplus, x, softplus(beta * x) / beta)
     return smooth_softplus(x, beta_softplus) if use_softplus else (x + eps)
 
-def _gradient_clipping(grad, eps=1e-3):
-    # TODO implement gradient clipping
-    return grad
+def _axis_aware_euclidian_norm(param):
+    """euclidian norm with special cases to deal with various layer shapes"""
+    if param.ndim <= 1:
+        # fully flattens the norm
+        return jnp.linalg.norm(param, ord=2, keepdims=False)
+    else:
+        # dimensions along which to compute the norm, special case for linear layers
+        axis = 1 if param.ndim <= 3 else tuple(range(1, param.ndim)) # 1 ... ndim-1
+        return jnp.linalg.norm(param, ord=2, axis=axis, keepdims=True)
+
+def _gradient_clipping(grad, param, non_zero, eps=1e-3, threshold=1e-2):
+    """
+    variant of gradient clipping that uses a dynamic threshold
+    eps is there to avoid freezing zero-parameters
+    """
+    norm_grad = non_zero(_axis_aware_euclidian_norm(grad))
+    norm_param = jnp.max(_axis_aware_euclidian_norm(param), eps)
+    dynamic_threshold = threshold * (norm_param / norm_grad)
+    return jnp.where(dynamic_threshold < 1., grad * dynamic_threshold, grad)
 
 def _gradient_normalization(grad, non_zero, centralize_gradients=True, normalize_gradients=True):
     """
@@ -152,16 +172,6 @@ def _gradient_normalization(grad, non_zero, centralize_gradients=True, normalize
     else:
         # otherwise does nothing
         return grad
-
-def _axis_aware_euclidian_norm(param):
-    """norm used in norm loss, with special cases to deal with various layer shapes"""
-    if param.ndim <= 1:
-        # fully flattens the norm
-        return jnp.linalg.norm(param, ord=2, keepdims=False)
-    else:
-        # dimensions along which to compute the norm, special case for linear layers
-        axis = 1 if param.ndim <= 3 else tuple(range(1, param.ndim)) # 1 ... ndim-1
-        return jnp.linalg.norm(param, ord=2, axis=axis, keepdims=True)
 
 def _learning_rate_scheduler(max_learning_rate, 
                              iteration, nb_iterations, nb_warmup_iterations, nb_warmdown_iterations, 
