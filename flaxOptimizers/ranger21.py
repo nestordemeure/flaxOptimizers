@@ -54,6 +54,11 @@ class Ranger21(OptimizerDef):
                  beta_lookahead=0.5, lookahead_every_nth_iter=5,
                  nb_warmup_iterations=None, nb_warmdown_iterations=None,
                  centralize_gradients=True, normalize_gradients=True):
+        """
+        beta0: Manages the amplitude of the noise introduced by positive negative momentum.
+               While 0.9 is a recommended default value, you can use -0.5 to minimize the noise.
+        weight_decay: the optimizer is much more sensitve to weight decay than AdamW and thus, it should be limited to lower values such as 1e-4
+        """
         nb_warmup_iterations = (0.22 * nb_iterations) if nb_warmup_iterations is None else nb_warmup_iterations
         nb_warmdown_iterations = (0.28 * nb_iterations) if nb_warmdown_iterations is None else nb_warmdown_iterations
         hyper_params = _Ranger21HyperParams(learning_rate, beta0, beta1, beta2, 
@@ -94,8 +99,8 @@ class Ranger21(OptimizerDef):
         grad_sq_ema_corr = grad_sq_ema_max / (1 - beta2 ** t)
 
         # update vector
-        beta_normalizer = jnp.hypot(1. + beta0, beta0) # takes positive negative momentum into account
-        denom = beta_normalizer * jnp.sqrt(grad_sq_ema_corr)
+        pnm_noise_amplitude = jnp.hypot(1. + beta0, beta0) # takes positive negative momentum into account
+        denom = pnm_noise_amplitude * jnp.sqrt(grad_sq_ema_corr)
         update = grad_ema_corr / non_zero(denom)
 
         # weight decay
@@ -144,7 +149,7 @@ def _gradient_clipping(grad, param, non_zero, eps=1e-3, threshold=1e-2):
     `non_zero` is a function that takes an input and insures that it will not be zero or negative
     """
     norm_grad = non_zero(_axis_aware_euclidian_norm(grad))
-    norm_param = jnp.max(_axis_aware_euclidian_norm(param), eps)
+    norm_param = lax.max(_axis_aware_euclidian_norm(param), eps)
     dynamic_threshold = threshold * (norm_param / norm_grad)
     return jnp.where(dynamic_threshold < 1., grad * dynamic_threshold, grad)
 
@@ -164,7 +169,7 @@ def _gradient_normalization(grad, non_zero, centralize_gradients=True, normalize
         grad -= grad_mean
         if can_normalize:
             # divide the centralized gradient by its standard deviation
-            grad_std = grad.sd(axis=axis, keepdims=keepdims)
+            grad_std = grad.std(axis=axis, keepdims=keepdims)
             grad /= non_zero(grad_std) # we divide *after* subtracting the mean
             # add the mean back to the gradient if we don't want to centralize it
             if not can_centralize: grad += grad_mean
@@ -174,9 +179,9 @@ def _learning_rate_scheduler(max_learning_rate,
                              iteration, nb_iterations, nb_warmup_iterations, nb_warmdown_iterations, 
                              beta2):
     """combines explore-exploit scheduling with a linear warmup"""
-    warmup_scaling = jnp.max(0.5 * iteration * (1. - beta2), iteration / nb_warmup_iterations)
+    warmup_scaling = lax.max(0.5 * iteration * (1. - beta2), iteration / nb_warmup_iterations)
     warmdown_scaling = (nb_iterations - iteration) / nb_warmdown_iterations
-    scaling = jnp.min(1., warmup_scaling, warmdown_scaling) 
+    scaling = lax.min(1., lax.min(warmup_scaling, warmdown_scaling))
     return scaling * max_learning_rate
 
 def _lookahead(param, lookahead_ema, step, beta_lookahead=0.5, lookahead_every_nth_iter=4):
