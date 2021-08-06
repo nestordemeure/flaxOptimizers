@@ -1,5 +1,6 @@
 # local developement install
 flaxOptimizers.egg-info/
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
